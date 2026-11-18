@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to (re)generate the release for, e.g. v4.2.9-cas.3'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -12,6 +18,8 @@ jobs:
   changelog:
     name: Create Release
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -22,6 +30,33 @@ jobs:
         run: git tag -d beta
         continue-on-error: true
 
-      - run: npx changelogithub # or changelogithub@0.12 if ensure the stable result
+      # changelogithub 直接调 POST /releases，偶发 422（tag 已被建过 release、
+      # 或者接口抖动）就会整条 workflow 变红。这里只把它当"尽力而为"的
+      # 说明生成器，真正的 release 由下一步用 gh 兜底创建。
+      - name: Generate changelog (best effort)
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ref="$TAG"
+          git rev-parse --verify "$ref" >/dev/null 2>&1 || git fetch --depth=1 origin "refs/tags/$ref:refs/tags/$ref"
+          npx changeloggithub --output CHANGELOG.md
+          ls -l CHANGELOG.md || true
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "release $TAG already exists"
+            if [ -s CHANGELOG.md ]; then
+              gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file CHANGELOG.md
+            fi
+            exit 0
+          fi
+          if [ -s CHANGELOG.md ]; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes-file CHANGELOG.md
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+          fi
