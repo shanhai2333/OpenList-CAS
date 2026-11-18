@@ -115,6 +115,32 @@ Thank you for your support and understanding of the OpenList project.
 - [x] Copy files between two storage
 - [x] Multi-thread downloading acceleration for single-thread download/stream
 
+## CAS (189Cloud PC)
+
+This branch keeps **both** CAS carriers, controlled by the `cas_mode` option of the
+`189CloudPC` storage:
+
+| `cas_mode` | What is produced after upload |
+|---|---|
+| `auto` (default) | Follows the legacy switches: `.cas.torrent` only when `generate_torrent` is on |
+| `off` | Nothing |
+| `sidecar` | `<name>.cas` metadata file (`base64(json)`, restorable) |
+| `torrent` | `<name>.cas.torrent` seed with the CAS extension |
+| `both` | Both sidecars |
+
+The two payload formats are byte-for-byte compatible, so a `.cas` produced by either
+implementation can be read by the other. A `.cas` dropped into a directory is restored
+automatically when `restore_source_from_cas` is enabled; `.cas.torrent` files go through
+the seed pipeline. Files ending in `.cas` / `.cas.torrent` never get a sidecar of their own.
+
+Related options: `delete_source`, `restore_source_from_cas`, `delete_cas_after_restore`,
+`auto_restore_existing_cas` + `auto_restore_existing_cas_paths`, `cas_ext_allowlist`,
+`cas_download_restore`. The `Local` storage only exposes `generate_cas` / `delete_source`.
+
+> ⚠️ `.cas` is **not a backup**. Deleting the source keeps the data alive only through the
+> cloud recycle bin / deduplicated blocks. Emptying the recycle bin permanently breaks the
+> matching `.cas` files.
+
 ## Document
 
 - 📘 [Docs](https://doc.oplist.org)

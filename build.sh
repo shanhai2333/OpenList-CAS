@@ -25,6 +25,18 @@ else
   webVersion=$(eval "curl -fsSL --max-time 2 $githubAuthArgs \"https://api.github.com/repos/$frontendRepo/releases/latest\"" | grep "tag_name" | head -n 1 | awk -F ":" '{print $2}' | sed 's/\"//g;s/,//g;s/ //g')
 fi
 
+# CAS 分支版本号：跟随上游版本，追加 -cas.N（如 v4.2.9 -> v4.2.9-cas.1）。
+# CAS_REV 可覆盖序号；tag 本身已带 -cas. 时保持不变，保证幂等。
+if [ "$version" != "dev" ] && [ "$version" != "beta" ]; then
+  case "$version" in
+    *-cas.*) ;;
+    *)
+      casRev="${CAS_REV:-1}"
+      version="${version}-cas.${casRev}"
+      ;;
+  esac
+fi
+
 echo "backend version: $version"
 echo "frontend version: $webVersion"
 
