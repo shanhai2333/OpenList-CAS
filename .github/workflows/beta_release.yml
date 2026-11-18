@@ -46,13 +46,15 @@ jobs:
       - name: Upload assets to beta release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view beta; then
-            gh release create beta --prerelease --notes-file CHANGELOG.md
+          set -x
+          if gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit beta --repo "$GITHUB_REPOSITORY" --prerelease --notes-file CHANGELOG.md
           else
-            gh release edit beta --prerelease --notes-file CHANGELOG.md
+            gh release create beta --repo "$GITHUB_REPOSITORY" --prerelease --title beta --notes-file CHANGELOG.md
           fi
-          gh release upload beta "CHANGELOG.md" --clobber
+          gh release upload beta --repo "$GITHUB_REPOSITORY" "CHANGELOG.md" --clobber
 
       - name: Upload assets to github artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -174,9 +176,10 @@ jobs:
       - name: Upload assets to beta release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for file in build/compress/*; do
-            gh release upload beta "$file" --clobber
+            gh release upload beta --repo "$GITHUB_REPOSITORY" "$file" --clobber
           done
 
       - name: Clean illegal characters from matrix.target
