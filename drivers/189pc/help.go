@@ -13,6 +13,7 @@ import (
 	"encoding/pem"
 	"encoding/xml"
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
 	"strings"
@@ -220,6 +221,76 @@ func BoolToNumber(b bool) int {
 func partSize(size int64) int64 {
 	return torrent.CASSliceSize(size)
 }
+
+// casSliceSizeByLimit 与 torrent.CASSliceSize 同规则，但片数上限可指定。
+//
+// 上游/本项目用的是 999；CAS 生成端（MyMediaHelper）实测后改用 1000，
+// 于是边界窗口 `(999*10MiB, 1000*10MiB]` 与 `(2*999*10MiB, 2*1000*10MiB]`
+// 两侧算出的分片大小会差一档：生成端写 10MiB 的 sliceMd5，消费端却按 20MiB
+// 去比对，必然 fileDataExists=0。
+func casSliceSizeByLimit(size int64, limit int64) int64 {
+	const def = int64(10 * 1024 * 1024)
+	if limit <= 0 {
+		limit = 999
+	}
+	if size > def*2*limit {
+		multiple := int64(math.Ceil((float64(size) / 1999) / float64(def)))
+		if multiple < 5 {
+			multiple = 5
+		}
+		return multiple * def
+	}
+	if size > def*limit {
+		return def * 2
+	}
+	return def
+}
+
+// casSliceSizeCandidates 返回去重后的分片大小候选，标准档位在前。
+//
+// `.cas` 载荷不记录分片大小（只有五个字段），所以无法从文件自证它当初是按
+// 哪一档算的；天翼又是按客户端上报的 sliceSize 现场重算判重。恢复时只能
+// 逐档探测：标准档不命中就换一档再问，命中即 commit。
+// 只枚举**比标准档更小**的档位（口径差异只会让另一侧算出更小的分片），
+// 绝大多数文件因此只有一项，行为与单档完全一致。
+func casSliceSizeCandidates(size int64) []int64 {
+	const (
+		def      = int64(10 * 1024 * 1024)
+		maxParts = int64(1999)
+	)
+	standard := partSize(size)
+	candidates := []int64{standard}
+	for _, sliceSize := range []int64{casSliceSizeByLimit(size, 1000), def * 2, def} {
+		if sliceSize >= standard || sliceSize < def {
+			continue
+		}
+		// 片数超上限的档位必然被服务端拒绝，不必浪费请求
+		if size > 0 && (size+sliceSize-1)/sliceSize > maxParts {
+			continue
+		}
+		duplicated := false
+		for _, existing := range candidates {
+			if existing == sliceSize {
+				duplicated = true
+				break
+			}
+		}
+		if !duplicated {
+			candidates = append(candidates, sliceSize)
+		}
+	}
+	return candidates
+}
+
+// formatSliceSize 仅用于错误信息，避免为一行日志引入额外依赖。
+func formatSliceSize(sliceSize int64) string {
+	const mib = int64(1024 * 1024)
+	if sliceSize%mib == 0 {
+		return fmt.Sprintf("%dMiB", sliceSize/mib)
+	}
+	return fmt.Sprintf("%dB", sliceSize)
+}
+
 
 func isBool(bs ...bool) bool {
 	for _, b := range bs {

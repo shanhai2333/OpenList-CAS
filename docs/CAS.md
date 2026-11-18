@@ -17,10 +17,16 @@
 
 1. **分片大小不是固定 10MiB**。天翼按文件大小决定：≤9.76GiB 用 10MiB，更大用 20MiB 或继续上浮（`pkg/torrent.CASSliceSize`）。
    `.cas` 里的 `sliceMd5` 必须按同一规则计算，否则秒传永远失败。统一入口：`casmeta.SliceSizeFor(size)`。
-2. **上传只读一遍**。`StreamUpload` / `fastUpload` 里已有的整文件 MD5、分片 MD5、SHA-1 piece 在同一次 `io.MultiWriter` 中被复用，
+2. **分片数上限有 999 / 1000 两种口径**。本项目与上游用 999（`pkg/torrent.CASSliceSize`），
+   而 `.cas` 生成端 MyMediaHelper 实测后改用 1000（`casmeta.py` 的 `PART_COUNT_LIMIT`）。
+   二者只在两个 10MiB 宽的窗口不一致：`(999×10MiB, 1000×10MiB]` 与 `(2×999×10MiB, 2×1000×10MiB]`
+   —— 生成端写 10MiB/20MiB 的 `sliceMd5`，本项目却按 20MiB/50MiB 去比对，`fileDataExists=0`。
+   因此恢复时用 `casSliceSizeCandidates()` 逐档探测：标准档不命中就降一档再问，命中即 commit
+   （`.cas` 不记录分片大小，无法自证；天翼按上报的 `sliceSize` 现场重算判重）。
+3. **上传只读一遍**。`StreamUpload` / `fastUpload` 里已有的整文件 MD5、分片 MD5、SHA-1 piece 在同一次 `io.MultiWriter` 中被复用，
    `.cas` 侧车不额外扫描文件。
-3. **侧车不生成侧车**。`.cas` / `.cas.torrent` 自身永远不再产出侧车，避免 `x.cas.cas` 递归。
-4. **`delete_source` 依赖回收站**。天翼云删除是移入回收站，数据块仍在，秒传才能命中；清空回收站会让对应 `.cas` 永久失效。
+4. **侧车不生成侧车**。`.cas` / `.cas.torrent` 自身永远不再产出侧车，避免 `x.cas.cas` 递归。
+5. **`delete_source` 依赖回收站**。天翼云删除是移入回收站，数据块仍在，秒传才能命中；清空回收站会让对应 `.cas` 永久失效。
    Local 存储的 `delete_source` 走 `conf.RemovePermanentlyKey`，是真正的删除。
 
 ## 配置项（189CloudPC）
