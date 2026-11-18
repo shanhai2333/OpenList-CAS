@@ -60,7 +60,7 @@
 ```yaml
 services:
   openlist-cas:
-    image: shanhaijun/openlist-cas:beta
+    image: shanhaijun/openlist-cas:latest
     container_name: openlist-cas
     restart: always
     user: '0:0'
@@ -75,7 +75,7 @@ services:
       - '/path/to/local:/mnt/local'
 ```
 
-镜像地址取决于 DockerHub 的配置，见下文「构建与发布」。首次启动后用 `docker exec -it openlist-cas ./openlist admin set <新密码>` 设置管理员密码。
+镜像地址取决于 DockerHub 的配置，见下文「构建与发布」：`latest` 指向最近一次正式发布，`vX.Y.Z-cas.N` 可钉死版本，`beta` 跟随 main 分支滚动构建。首次启动后用 `docker exec -it openlist-cas ./openlist admin set <新密码>` 设置管理员密码。
 
 ### 从源码构建
 
@@ -159,7 +159,7 @@ Local 存储只有 `generate_cas` 与 `delete_source` 两个开关。
 | `GITEE_REPO_URL` | 空 | 填了才会执行 Gitee 同步，为空时该工作流自动跳过 |
 | `HOOK_REPO` | `OpenListTeam/OpenList-OpenWRT` | 仅在上游仓库生效，本仓库忽略 |
 
-> 只需要镜像能推成功时，配 `DOCKERHUB_TOKEN` 一个 secret 就够了：镜像名与登录用户名默认都取 `shanhaijun`。推出来的镜像是 `shanhaijun/openlist-cas:<tag>`（`beta` 或 `vX.Y.Z-cas.N`），与同账号下的 `mymediahelper` 镜像是两个独立仓库。
+> 只需要镜像能推成功时，配 `DOCKERHUB_TOKEN` 一个 secret 就够了：镜像名与登录用户名默认都取 `shanhaijun`。推出来的镜像是 `shanhaijun/openlist-cas:<tag>`：`latest` 与 `vX.Y.Z-cas.N` 由打 tag 触发，`beta` 由 push main 触发；与同账号下的 `mymediahelper` 镜像是两个独立仓库。
 
 ### 版本号
 
