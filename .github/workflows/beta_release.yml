@@ -41,12 +41,15 @@ jobs:
           git tag -l
           npx changelogithub --output CHANGELOG.md
 
-      - name: Upload assets to beta release
+      - name: Update beta release notes
+        # 只更新 release notes；失败不该挡住产物构建（历史上这一步在 fork 里一直失败）
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -x
+          gh --version | head -1 || true
+          ls -l CHANGELOG.md || true
           if gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit beta --repo "$GITHUB_REPOSITORY" --prerelease --notes-file CHANGELOG.md
           else
@@ -170,6 +173,13 @@ jobs:
           bash build.sh zip ${{ matrix.hash }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure beta release exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create beta --repo "$GITHUB_REPOSITORY" --prerelease --title beta --notes "beta build $GITHUB_SHA"
 
       - name: Upload assets to beta release
         env:
