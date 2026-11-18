@@ -1,201 +1,194 @@
 <div align="center">
   <img src="https://raw.githubusercontent.com/OpenListTeam/Logo/main/logo.svg" width="128" height="128" alt="logo" />
 
-  <p><em>OpenList is a resilient, long-term governance, community-driven fork of AList — built to defend open source against trust-based attacks.</em></p>
+  <h1>OpenList-CAS</h1>
 
-  <img src="https://goreportcard.com/badge/github.com/OpenListTeam/OpenList/v3" alt="latest version" />
-  <a href="https://github.com/OpenListTeam/OpenList/blob/main/LICENSE"><img src="https://img.shields.io/github/license/OpenListTeam/OpenList" alt="License" /></a>
-  <a href="https://github.com/OpenListTeam/OpenList/actions?query=workflow%3ABuild"><img src="https://img.shields.io/github/actions/workflow/status/OpenListTeam/OpenList/build.yml?branch=main" alt="Build status" /></a>
-  <a href="https://github.com/OpenListTeam/OpenList/releases"><img src="https://img.shields.io/github/release/OpenListTeam/OpenList" alt="latest version" /></a>
+  <p><em>基于 <a href="https://github.com/OpenListTeam/OpenList">OpenList</a> 的「天翼云盘 CAS 秒传」增强分支</em></p>
 
-  <a href="https://github.com/OpenListTeam/OpenList/discussions"><img src="https://img.shields.io/github/discussions/OpenListTeam/OpenList?color=%23ED8936" alt="discussions" /></a>
-  <a href="https://github.com/OpenListTeam/OpenList/releases"><img src="https://img.shields.io/github/downloads/OpenListTeam/OpenList/total?color=%239F7AEA&logo=github" alt="Downloads" /></a>
+  <a href="https://github.com/shanhai2333/OpenList-CAS/actions"><img src="https://img.shields.io/github/actions/workflow/status/shanhai2333/OpenList-CAS/build.yml?branch=main" alt="Build status" /></a>
+  <a href="https://github.com/shanhai2333/OpenList-CAS/releases"><img src="https://img.shields.io/github/v/release/shanhai2333/OpenList-CAS" alt="latest version" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/shanhai2333/OpenList-CAS" alt="License" /></a>
 </div>
 
 ---
 
-- English | [中文](./README/README_cn.md) | [日本語](./README/README_ja.md) | [Dutch](./README/README_nl.md) | [한국어](./README/README_ko.md) | [Deutsch](./README/README_de.md) | [Русский](./README/README_ru.md) | [Français](./README/README_fr.md) | [Español](./README/README_es.md) | [العربية](./README/README_ar.md)
+## 这是什么
 
-- [Contributing](./CONTRIBUTING.md)
-- [CODE OF CONDUCT](./CODE_OF_CONDUCT.md)
-- [LICENSE](./LICENSE)
+本仓库是 [OpenList](https://github.com/OpenListTeam/OpenList) 的非官方增强分支，在**完整保留上游功能**的前提下，围绕天翼云盘（189）的 `.cas` 秒传元数据增加了生成、恢复、临时播放与自动恢复能力。
 
-## Disclaimer
+- **代码基座跟随上游**：分支基于上游 `main`，通过 merge 同步更新，不另起一套实现。
+- **两套 CAS 并存**：上游的 `.cas.torrent`（torrent 内嵌 CAS）与本分支的 `.cas`（纯元数据侧车）可以同时使用，格式互通。
+- **版本号**：`vX.Y.Z-cas.N`，`X.Y.Z` 对应当前所基于的上游版本，`N` 是本分支的修订号。
 
-OpenList is an open-source project independently maintained by the OpenList Team, following the AGPL-3.0 license and committed to maintaining complete code openness and modification transparency.
+## 特性
 
-We have noticed the emergence of some third-party projects in the community with names similar to this project, such as OpenListApp/OpenListApp, as well as some paid proprietary software using the same or similar naming. To avoid user confusion, we hereby declare:
+### CAS（本分支增强）
 
-- OpenList has no official association with any third-party derivative projects.
+- 上传后自动生成 `<文件名>.cas`（`base64(json)`，只记录 `name / size / md5 / sliceMd5 / create_time`）
+- 拖入 `.cas` 即按元数据秒传恢复原文件；可配置恢复后删除 `.cas`
+- 生成 `.cas` 后可自动删除源文件，节省空间
+- `.cas` 视频可在线播放：播放时在后端恢复临时文件，播完自动清理
+- 按目录定时/手动刷新自动恢复已有 `.cas`
+- 上传 `.cas` 侧车自身不会再生成侧车（不会出现 `x.cas.cas`）
+- Local 本地存储同样支持生成 `.cas`（`delete_source` 为真删除，不依赖回收站）
 
-- All software, code, and services of this project are maintained by the OpenList Team and are freely available on GitHub.
+`189CloudPC` 的 `cas_mode` 决定上传后产出什么：
 
-- Project documentation and API services primarily rely on charitable resources provided by Cloudflare. There are currently no paid plans or commercial deployments, and the use of existing features does not involve any costs.
-
-We respect the community's rights to free use and derivative development, but we also strongly urge downstream projects:
-
-- Should not use the "OpenList" name for impersonation promotion or commercial gain;
-
-- Must not distribute OpenList-based code in a closed-source manner or violate AGPL license terms.
-
-To better maintain healthy ecosystem development, we recommend:
-
-- Clearly indicate the project source and choose appropriate open-source licenses in accordance with the open-source spirit;
-
-- If involving commercial use, please avoid using "OpenList" or any confusing naming as the project name;
-
-- If you need to use materials located under OpenListTeam/Logo, you may modify and use them under compliance with the agreement.
-
-Thank you for your support and understanding of the OpenList project.
-
-## Features
-
-- [x] Multiple storages
-  - [x] Local storage
-  - [x] [Aliyundrive](https://www.alipan.com)
-  - [x] OneDrive / Sharepoint ([Global](https://www.microsoft.com/en-us/microsoft-365/onedrive/online-cloud-storage), [CN](https://portal.partner.microsoftonline.cn), DE, US)
-  - [x] [189cloud](https://cloud.189.cn) (Personal, Family)
-  - [x] [GoogleDrive](https://drive.google.com)
-  - [x] [123pan](https://www.123pan.com)
-  - [x] [FTP / SFTP](https://en.wikipedia.org/wiki/File_Transfer_Protocol)
-  - [x] [PikPak](https://www.mypikpak.com)
-  - [x] [S3](https://aws.amazon.com/s3)
-  - [x] [Seafile](https://seafile.com)
-  - [x] [UPYUN Storage Service](https://www.upyun.com/products/file-storage)
-  - [x] [WebDAV](https://en.wikipedia.org/wiki/WebDAV)
-  - [x] Teambition([China](https://www.teambition.com), [International](https://us.teambition.com))
-  - [x] [MediaFire](https://www.mediafire.com)
-  - [x] [Mediatrack](https://www.mediatrack.cn)
-  - [x] [ProtonDrive](https://proton.me/drive)
-  - [x] [139yun](https://yun.139.com) (Personal, Family, Group, Share)
-  - [x] [YandexDisk](https://disk.yandex.com)
-  - [x] [BaiduNetdisk](http://pan.baidu.com)
-  - [x] [Terabox](https://www.terabox.com/main)
-  - [x] [UC](https://drive.uc.cn)
-  - [x] [Quark](https://pan.quark.cn)
-  - [x] [Thunder](https://pan.xunlei.com)
-  - [x] [Lanzou](https://www.lanzou.com)
-  - [x] [ILanzou](https://www.ilanzou.com)
-  - [x] [Google photo](https://photos.google.com)
-  - [x] [Mega.nz](https://mega.nz)
-  - [x] [Baidu photo](https://photo.baidu.com)
-  - [x] [SMB](https://en.wikipedia.org/wiki/Server_Message_Block)
-  - [x] [115](https://115.com)
-  - [X] [Cloudreve](https://cloudreve.org)
-  - [x] [Dropbox](https://www.dropbox.com)
-  - [x] [FeijiPan](https://www.feijipan.com)
-  - [x] [dogecloud](https://www.dogecloud.com/product/oss)
-  - [x] [Azure Blob Storage](https://azure.microsoft.com/products/storage/blobs)
-  - [x] [Chaoxing](https://www.chaoxing.com)
-  - [x] [CNB](https://cnb.cool/)
-  - [x] [Degoo](https://degoo.com)
-  - [x] [Doubao](https://www.doubao.com)
-  - [x] [Febbox](https://www.febbox.com)
-  - [x] [GitHub](https://github.com)
-  - [x] [OpenList](https://github.com/OpenListTeam/OpenList)
-  - [x] [Teldrive](https://github.com/tgdrive/teldrive)
-  - [x] [Weiyun](https://www.weiyun.com)
-  - [x] [DingTalk Docs](https://alidocs.dingtalk.com/)
-- [x] Easy to deploy and out-of-the-box
-- [x] File preview (PDF, markdown, code, plain text, ...)
-- [x] Image preview in gallery mode
-- [x] Video and audio preview, support lyrics and subtitles
-- [x] Office documents preview (docx, pptx, xlsx, ...)
-- [x] `README.md` preview rendering
-- [x] File permalink copy and direct file download
-- [x] Dark mode
-- [x] I18n
-- [x] Protected routes (password protection and authentication)
-- [x] WebDAV
-- [x] Docker Deploy
-- [x] Cloudflare Workers proxy
-- [x] File/Folder package download
-- [x] Web upload(Can allow visitors to upload), delete, mkdir, rename, move and copy
-- [x] Offline download
-- [x] Copy files between two storage
-- [x] Multi-thread downloading acceleration for single-thread download/stream
-
-## CAS (189Cloud PC)
-
-This branch keeps **both** CAS carriers, controlled by the `cas_mode` option of the
-`189CloudPC` storage:
-
-| `cas_mode` | What is produced after upload |
+| `cas_mode` | 上传后的产物 |
 |---|---|
-| `auto` (default) | Follows the legacy switches: `.cas.torrent` only when `generate_torrent` is on |
-| `off` | Nothing |
-| `sidecar` | `<name>.cas` metadata file (`base64(json)`, restorable) |
-| `torrent` | `<name>.cas.torrent` seed with the CAS extension |
-| `both` | Both sidecars |
+| `auto`（默认） | 沿用旧开关：仅在 `generate_torrent` 打开时生成 `.cas.torrent` |
+| `off` | 不生成任何侧车 |
+| `sidecar` | `<文件名>.cas` 元数据文件 |
+| `torrent` | `<文件名>.cas.torrent`（带 CAS 扩展的种子） |
+| `both` | 两种都生成 |
 
-The two payload formats are byte-for-byte compatible, so a `.cas` produced by either
-implementation can be read by the other. A `.cas` dropped into a directory is restored
-automatically when `restore_source_from_cas` is enabled; `.cas.torrent` files go through
-the seed pipeline. Files ending in `.cas` / `.cas.torrent` never get a sidecar of their own.
+### 与上游一致的通用能力
 
-Related options: `delete_source`, `restore_source_from_cas`, `delete_cas_after_restore`,
-`auto_restore_existing_cas` + `auto_restore_existing_cas_paths`, `cas_ext_allowlist`,
-`cas_download_restore`. The `Local` storage only exposes `generate_cas` / `delete_source`.
+- 多存储挂载：本地、阿里云盘、OneDrive / SharePoint（国际 / 世纪互联 / DE / US）、天翼云盘（个人 / 家庭）、Google Drive、123 网盘、FTP / SFTP、PikPak、S3、Seafile、又拍云、WebDAV、Teambition、MediaFire、Mediatrack、ProtonDrive、139 云盘、Yandex Disk、百度网盘、Terabox、UC、夸克、迅雷、蓝奏云、Google 相册、MEGA、百度相册、SMB、115、Cloudreve、Dropbox、飞机盘、DogeCloud OSS、Azure Blob、超星、CNB、Degoo、豆包、Febbox、GitHub、OpenList、Teldrive、微云、钉钉文档等
+- 开箱即用的部署体验
+- 文件预览（PDF / Markdown / 代码 / 纯文本等）、图片画廊、音视频播放（支持歌词与字幕）
+- Office 文档预览（docx / pptx / xlsx 等）、`README.md` 渲染
+- 直链复制与文件直链下载、深色模式、多语言
+- 受保护路由（密码与身份认证）、WebDAV、Docker 部署
+- 文件/文件夹打包下载、网页上传（可开放给访客）/ 删除 / 新建 / 重命名 / 移动 / 复制
+- 离线下载、跨存储复制、单线程下载/串流的多线程加速
 
-> ⚠️ `.cas` is **not a backup**. Deleting the source keeps the data alive only through the
-> cloud recycle bin / deduplicated blocks. Emptying the recycle bin permanently breaks the
-> matching `.cas` files.
+## 快速开始
 
-## Document
+### Docker Compose
 
-- 📘 [Docs](https://doc.oplist.org)
-- 🌏 [CN Mirror](https://doc.oplist.org.cn)
-- ⚖️ [Terms of Use](https://doc.oplist.org/terms)
-- 🔒 [Privacy Policy](https://doc.oplist.org/privacy)
+```yaml
+services:
+  openlist-cas:
+    image: shanhai2333/openlist:beta
+    container_name: openlist-cas
+    restart: always
+    user: '0:0'
+    ports:
+      - '5244:5244'
+      - '5245:5245'
+    environment:
+      - UMASK=022
+      - TZ=Asia/Shanghai
+    volumes:
+      - './data:/opt/openlist/data'
+      - '/path/to/local:/mnt/local'
+```
 
-## Demo
+镜像地址取决于 DockerHub 的配置，见下文「构建与发布」。首次启动后用 `docker exec -it openlist-cas ./openlist admin set <新密码>` 设置管理员密码。
 
-- 🌎 [Global Demo](https://demo.oplist.org)
-- 🇨🇳 [CN Demo](https://demo.oplist.org.cn)
+### 从源码构建
 
-## Discussion
+```bash
+# 1) 拉取前端产物到 public/dist（从 OpenList-Frontend 的 release 下载，不需要 Node）
+bash build.sh dev web
 
-Please refer to [*Discussions*](https://github.com/OpenListTeam/OpenList/discussions) for raising general questions, ***Issues* is for bug reports and feature requests only.**
+# 2) 编译当前平台（go.mod 要求 go 1.26.4 / toolchain go 1.27.3）
+go build -tags jsoniter -o openlist .
 
-## Sponsor
+# 运行
+./openlist server
+```
 
-[![VPS.Town](https://vps.town/static/images/sponsor.png)](https://vps.town "VPS.Town - Trust, Effortlessly. Your Cloud, Reimagined.")
+`bash build.sh release` 会一次性产出全部发布目标，但依赖 musl 交叉编译工具链（CI 里由 workflow 安装）；只想本地跑起来用上面两步即可。
 
-## Donors
+## CAS 使用说明
 
-Thanks to the following donors for their generous support:
+以 `189CloudPC` 存储为例：
 
-- [HisAtri](https://github.com/HisAtri)
-- 爱发电用户_7jTh
-- suka
+1. 添加存储并登录天翼账号；
+2. 把 `cas_mode` 设为 `sidecar`（或 `both`）；
+3. 按需打开：
+   - `delete_source`：生成 `.cas` 后删除源文件（**注意下方警告**）
+   - `restore_source_from_cas`：上传 `.cas` 时直接恢复源文件
+   - `delete_cas_after_restore`：恢复后删除 `.cas`
+   - `auto_restore_existing_cas` + `auto_restore_existing_cas_paths`：按目录自动恢复
+   - `cas_ext_allowlist`：参与 CAS 的扩展名白名单（与 Local 共用，空表示全部允许）
+   - `cas_download_restore`：通过 `/d/*` 直接下载 `.cas` 时返回恢复后的真实文件
 
-## License
+Local 存储只有 `generate_cas` 与 `delete_source` 两个开关。
 
-The `OpenList` is open-source software licensed under the [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) license.
+### ⚠️ 重要：`.cas` 不是备份
 
-## Disclaimer
+天翼云盘的「删除」是移入回收站，数据块仍然存在，秒传才能命中。**清空回收站会让对应 `.cas` 永久失效**；源文件被彻底删除后，`.cas` 只是一段无法恢复的文本。
 
-- This project is a free and open-source software designed to facilitate file sharing via net disks, primarily intended to support the downloading and learning of the Go programming language.
-- Please comply with all applicable laws and regulations when using this software. Any form of misuse is strictly prohibited.
-- The software is based on official SDKs or APIs without any modification, disruption, or interference with their behavior.
-- It only performs HTTP 302 redirects or traffic forwarding, and does not intercept, store, or tamper with any user data.
-- This project is not affiliated with any official platform or service provider.
-- The software is provided "as is", without any warranties of any kind, either express or implied, including but not limited to warranties of merchantability or fitness for a particular purpose.
-- The maintainers are not liable for any direct or indirect damages arising from the use of, or inability to use, this software.
-- You are solely responsible for any risks associated with using this software, including but not limited to account bans or download speed limitations.
-- This project is licensed under the [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) License. Please see the [LICENSE](./LICENSE) file for details.
+### 分片档位与旧 `.cas` 的兼容性
 
-## Contact Us
+天翼的分片大小由文件大小决定（≤9.77GiB 为 10MiB，更大为 20MiB 起）。不同生成端对「分片数上限」的取值可能差一位（999 与 1000），只在两个 10MiB 宽的边界区间内产生差异：
 
-- [@GitHub](https://github.com/OpenListTeam)
-- [Telegram Group](https://t.me/OpenListTeam)
-- [Telegram Channel](https://t.me/OpenListOfficial)
+- `(9.7559, 9.7656] GiB`
+- `(19.51, 19.53] GiB`
 
-## Contributors
+本分支恢复时会**逐档探测**分片大小，命中即恢复，因此由不同生成端产出的 `.cas` 都能用，不需要源文件、也不需要修改 `.cas`。
 
-We sincerely thank the author [Xhofe](https://github.com/Xhofe) of the original project [AlistGo/alist](https://github.com/AlistGo/alist) and all other contributors.
+## 与 MyMediaHelper 的互通
 
-Thanks goes to these wonderful people:
+本仓库的 `.cas` 与 **MyMediaHelper**（本地自用的媒体整理工具）生成端完全同构：外层 `base64`，内层 JSON 五字段逐字一致。任一端生成的 `.cas` 都可以被另一端读取；上游 `pkg/torrent` 的 CAS 载荷同样兼容，并额外支持 `partsMd5 / slice_size / cloud / files` 扩展字段（旧解码器会忽略）。
+
+## 构建与发布
+
+发布依赖 GitHub Actions：
+
+| 工作流 | 触发 | 作用 |
+|---|---|---|
+| `Beta Release builds` | push `main` / 手动 | 多平台交叉编译并上传到 `beta` release |
+| `Beta Release (Docker)` | push `main` / PR / 手动 | 构建并推送 `beta` 镜像 |
+| `Release builds (Docker)` | push `v*` tag / 手动 | 构建并推送对应版本 tag 的镜像 |
+| `Release Automatic changelog` | push `v*` tag | 生成 release notes |
+| `Test Build` | PR / 手动 | 单元测试 + 多目标编译 |
+
+### 仓库需要配置的 Secrets 与 Variables
+
+位置：仓库 **Settings → Secrets and variables → Actions**。`GITHUB_TOKEN` 由 GitHub 自动注入，无需配置。
+
+**Secrets（加密，必填项只有第一个）**
+
+| 名称 | 必填 | 用途 |
+|---|---|---|
+| `DOCKERHUB_TOKEN` | ✅（要推镜像时） | DockerHub Access Token，需 `Read & Write` 权限；用于 `beta` 与 `v*` 镜像推送 |
+| `GITEE_SSH_PRIVATE_KEY` | 可选 | 只有开启 Gitee 同步时才需要，配合变量 `GITEE_REPO_URL` |
+| `EXTERNAL_REPO_TOKEN_LUCI_APP_OPENLIST` | 不需要 | 上游仓库通知 OpenWRT 打包用；本仓库的 workflow 已按仓库名跳过 |
+
+**Variables（明文，全部可选）**
+
+| 名称 | 默认值 | 用途 |
+|---|---|---|
+| `DOCKERHUB_ORG_NAME` | 仓库 owner（如 `shanhai2333`） | 镜像命名空间，最终镜像为 `<该值>/openlist` |
+| `DOCKERHUB_ORG_NAME_BACKUP` | 空 | 当 DockerHub **登录用户名**与镜像命名空间不同时填写（例如镜像在组织下、用个人账号登录） |
+| `FRONTEND_REPO` | `OpenListTeam/OpenList-Frontend` | 前端产物来源仓库，一般不用改 |
+| `GITEE_REPO_URL` | 空 | 填了才会执行 Gitee 同步，为空时该工作流自动跳过 |
+| `HOOK_REPO` | `OpenListTeam/OpenList-OpenWRT` | 仅在上游仓库生效，本仓库忽略 |
+
+> 只需要镜像能推成功时，配 `DOCKERHUB_TOKEN` 一个 secret 就够了：镜像名与登录用户名默认都取仓库 owner。
+
+### 版本号
+
+`build.sh` 从最近的 git tag 推导版本，已是 `vX.Y.Z-cas.N` 时原样使用；从上游 tag（如 `v4.2.9`）出发时自动追加 `-cas.1`。发版打 tag 即可：
+
+```bash
+git tag v4.2.9-cas.3
+git push origin v4.2.9-cas.3
+```
+
+## 文档
+
+- 本分支的 CAS 设计说明：[docs/CAS.md](./docs/CAS.md)
+- 合并前的实现整理：[docs/cloud189-cas-implementation.md](./docs/cloud189-cas-implementation.md)、[docs/cloud189-cas-method-map.md](./docs/cloud189-cas-method-map.md)
+- 上游文档：<https://doc.oplist.org> ｜ 国内镜像：<https://doc.oplist.org.cn>
+- 英文说明（上游）：[OpenListTeam/OpenList](https://github.com/OpenListTeam/OpenList)
+
+## 免责声明
+
+- 本项目是免费的开源软件，用于通过网盘进行文件共享，主要目的是学习 Go 语言。
+- 请遵守所在地区的法律法规，禁止任何形式的滥用。
+- 软件基于官方 SDK / API 实现，不修改、不干扰其行为；只做 HTTP 302 跳转或流量转发，不拦截、不存储、不篡改用户数据。
+- 本项目与天翼云盘及任何官方平台、服务商均无关联，属于非官方分支。
+- 软件按「现状」提供，不附带任何明示或暗示的担保。
+- 使用本软件产生的风险（包括但不限于账号封禁、下载限速）由使用者自行承担。
+- 本项目基于 [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.txt) 许可，详见 [LICENSE](./LICENSE)。
+
+## 致谢
+
+感谢 [Xhofe](https://github.com/Xhofe) 与 [AlistGo/alist](https://github.com/AlistGo/alist) 的原始实现，感谢 [OpenListTeam](https://github.com/OpenListTeam) 维护的上游项目，以及所有为本项目提交代码、反馈问题的贡献者。
 
 [![Contributors](https://contrib.rocks/image?repo=OpenListTeam/OpenList)](https://github.com/OpenListTeam/OpenList/graphs/contributors)
-
