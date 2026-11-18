@@ -35,27 +35,8 @@ func (y *Cloud189PC) restoreCAS(ctx context.Context, dstDir model.Obj, info *cas
 	restoreInfo := *info
 	restoreInfo.Name = targetName
 
-	if temp && !y.isFamily() && y.FamilyTransfer {
-		return y.restoreCASDirect(ctx, dstDir, &restoreInfo, true, false)
-	}
-	if !y.isFamily() && y.FamilyTransfer {
-		y.beginCleanupTask()
-		defer y.endCleanupTask()
-		if err := y.ensureFamilyTransferFolder(ctx); err != nil {
-			return nil, err
-		}
-		obj, err := y.restoreCASDirect(ctx, y.familyTransferFolder, &restoreInfo, true, false)
-		if err != nil {
-			return nil, err
-		}
-		if err = y.SaveFamilyFileToPersonCloud(ctx, y.FamilyID, obj, dstDir, true, targetName); err != nil {
-			y.queueFamilyTransferCleanupObj(obj)
-			return nil, err
-		}
-		y.queueFamilyTransferCleanupObj(obj)
-		file, _, err := y.waitFamilyTransferFile(ctx, dstDir, targetName, targetName)
-		return file, err
-	}
+	// 天翼的秒传判重是账号级（个人云/家庭云同一份数据），
+	// 家庭云中转只是上传通道，恢复时直接落到目标目录即可。
 	return y.restoreCASDirect(ctx, dstDir, &restoreInfo, y.isFamily(), true)
 }
 

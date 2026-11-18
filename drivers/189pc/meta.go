@@ -27,7 +27,16 @@ type Addition struct {
 	FamilyTransfer  bool   `json:"family_transfer"`
 	RapidUpload     bool   `json:"rapid_upload"`
 	NoUseOcr        bool   `json:"no_use_ocr"`
-	GenerateTorrent bool   `json:"generate_torrent" help:"Generate torrent file with CAS extension after upload"`
+	GenerateTorrent bool   `json:"generate_torrent" help:"[cas_mode=auto only] Generate .cas.torrent with CAS extension after upload"`
+
+	CASMode                     string `json:"cas_mode" type:"select" options:"auto,off,sidecar,torrent,both" default:"auto" help:"CAS sidecar after upload: auto=follower legacy switches, off=none, sidecar=.cas metadata, torrent=.cas.torrent seed, both=both"`
+	DeleteSource                bool   `json:"delete_source" help:"After generating the .cas file, delete the uploaded source file and clear recycle bin"`
+	RestoreSourceFromCAS        bool   `json:"restore_source_from_cas" help:"Restore the source file when a .cas file is uploaded"`
+	DeleteCASAfterRestore       bool   `json:"delete_cas_after_restore" help:"After restoring the source file, delete the .cas file and clear recycle bin"`
+	AutoRestoreExistingCAS      bool   `json:"auto_restore_existing_cas" help:"Automatically scan monitored directories and restore .cas files"`
+	AutoRestoreExistingCASPaths string `json:"auto_restore_existing_cas_paths" type:"text" help:"One path per line; monitors these directories and subdirectories only. Empty means disabled"`
+	CASExtAllowlist             string `json:"cas_ext_allowlist" help:"CAS extension allowlist shared with Local. Empty means all extensions are allowed. Example: mp4,mkv,iso,zip"`
+	CASDownloadRestore          bool   `json:"cas_download_restore" help:"When enabled, downloading .cas files via /d/* will restore and return the real file instead of raw CAS metadata"`
 }
 
 var config = driver.Config{

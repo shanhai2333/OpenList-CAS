@@ -1,19 +1,26 @@
 package _189pc
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
+	"github.com/OpenListTeam/OpenList/v4/internal/casmeta"
 	"github.com/OpenListTeam/OpenList/v4/internal/driver"
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
+	"github.com/OpenListTeam/OpenList/v4/internal/op"
+	istream "github.com/OpenListTeam/OpenList/v4/internal/stream"
 	"github.com/OpenListTeam/OpenList/v4/pkg/cron"
+	"github.com/OpenListTeam/OpenList/v4/pkg/torrent"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 	"github.com/go-resty/resty/v2"
 	"github.com/google/uuid"
@@ -35,6 +42,15 @@ type Cloud189PC struct {
 	familyTransferFolder    *Cloud189Folder
 	cleanFamilyTransferFile func()
 
+	// .cas 侧车相关状态
+	debounceClean       func()
+	cleanupMu           sync.Mutex
+	cleanupTimer        *time.Timer
+	cleanupActive       int
+	autoRestoreMu       sync.Mutex
+	autoRestoreInFlight sync.Map
+	autoRestoreCron     *cron.Cron
+
 	storageConfig driver.Config
 	ref           *Cloud189PC
 	cron          *cron.Cron
@@ -53,6 +69,7 @@ func (y *Cloud189PC) GetAddition() driver.Additional {
 
 func (y *Cloud189PC) Init(ctx context.Context) (err error) {
 	y.storageConfig = config
+	casmeta.SetGlobalExtAllowlist(y.CASExtAllowlist)
 	if y.isFamily() {
 		// 兼容旧上传接口
 		if y.Addition.RapidUpload || y.Addition.UploadMethod == "old" {
@@ -130,6 +147,17 @@ func (y *Cloud189PC) Init(ctx context.Context) (err error) {
 			utils.Log.Errorf("cleanFamilyTransferFolderError:%s", err)
 		}
 	})
+
+	// .cas 临时目录清理（防抖）+ 自动恢复定时任务
+	y.debounceClean = y.newDebounceCleaner()
+	if y.AutoRestoreExistingCAS && strings.TrimSpace(y.AutoRestoreExistingCASPaths) != "" {
+		y.autoRestoreCron = cron.NewCron(y.autoRestoreInterval())
+		y.autoRestoreCron.Do(func() {
+			if err := y.autoRestoreCAS(context.TODO()); err != nil {
+				utils.Log.Errorf("autoRestoreCASError:%s", err)
+			}
+		})
+	}
 	return err
 }
 
@@ -148,14 +176,38 @@ func (y *Cloud189PC) Drop(ctx context.Context) error {
 		y.cron.Stop()
 		y.cron = nil
 	}
+	if y.autoRestoreCron != nil {
+		y.autoRestoreCron.Stop()
+		y.autoRestoreCron = nil
+	}
+	y.cleanupMu.Lock()
+	if y.cleanupTimer != nil {
+		y.cleanupTimer.Stop()
+		y.cleanupTimer = nil
+	}
+	y.cleanupMu.Unlock()
 	return nil
 }
 
+func (y *Cloud189PC) autoRestoreInterval() time.Duration {
+	minutes := y.GetStorage().CacheExpiration
+	if minutes <= 0 {
+		minutes = 30
+	}
+	return time.Duration(minutes) * time.Minute
+}
+
 func (y *Cloud189PC) List(ctx context.Context, dir model.Obj, args model.ListArgs) ([]model.Obj, error) {
+	if dirPath, ok := y.manualRefreshAutoRestorePath(args); ok {
+		y.startManualRefreshAutoRestore(ctx, dir, dirPath)
+	}
 	return y.getFiles(ctx, dir.GetID(), y.isFamily())
 }
 
 func (y *Cloud189PC) Link(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
+	if y.shouldPlayCAS(file, args) {
+		return y.linkCASVideo(ctx, file, args)
+	}
 	var downloadUrl struct {
 		URL string `json:"fileDownloadUrl"`
 	}
@@ -376,14 +428,78 @@ func familyTransferTempName(srcName string) string {
 }
 
 func (y *Cloud189PC) Put(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (newObj model.Obj, err error) {
+	sourceName := stream.GetName()
+	sourceSize := stream.GetSize()
+
+	// 拖入 .cas：直接按元数据恢复源文件（等同于秒传）
+	if y.RestoreSourceFromCAS && isCASName(sourceName) {
+		casData, readErr := io.ReadAll(io.LimitReader(stream, torrent.DefaultMaxSeedSize+1))
+		if readErr != nil {
+			return nil, readErr
+		}
+		info, parseErr := y.parseCAS(casData)
+		if parseErr != nil {
+			return nil, parseErr
+		}
+		restoredName, nameErr := resolveCASRestoreName(sourceName, info)
+		if nameErr != nil {
+			return nil, nameErr
+		}
+		if casmeta.ExtAllowed(restoredName, y.CASExtAllowlist) {
+			restored, restoreErr := y.restoreCAS(ctx, dstDir, info, sourceName, false)
+			if restoreErr != nil {
+				return nil, restoreErr
+			}
+			y.notifyTaskDone()
+			return restored, nil
+		}
+		// 扩展名不在白名单内：不恢复，按普通文件上传（流已读完，用缓存重建）
+		stream = &istream.FileStream{
+			Ctx:               ctx,
+			Obj:               &model.Object{Name: sourceName, Size: int64(len(casData)), Modified: stream.ModTime(), Ctime: stream.CreateTime(), HashInfo: stream.GetHash()},
+			Reader:            bytes.NewReader(casData),
+			Mimetype:          stream.GetMimetype(),
+			ForceStreamUpload: stream.IsForceStreamUpload(),
+			Exist:             stream.GetExist(),
+		}
+	}
+
+	newObj, info, err := y.uploadFile(ctx, dstDir, stream, up)
+	if err != nil {
+		return nil, err
+	}
+	if info != nil {
+		// 家庭云中转会改临时名，这里以用户看到的源文件名为准
+		info.Name = sourceName
+		info.Size = sourceSize
+	}
+	casObj, casErr := y.uploadCAS(ctx, dstDir, info)
+	if casErr != nil {
+		utils.Log.Warnf("failed to generate .cas for %s: %v", sourceName, casErr)
+	}
+	if casObj != nil && y.shouldDeleteSource() {
+		if err = y.deleteSource(ctx, dstDir, newObj, info); err != nil {
+			return nil, err
+		}
+		// 源文件已删，目录缓存里的旧条目要清掉
+		op.Cache.DeleteDirectory(y, dstDir.GetPath())
+		y.notifyTaskDone()
+		return casObj, nil
+	}
+	y.notifyTaskDone()
+	return newObj, nil
+}
+
+// uploadFile 是原本的上传编排（含家庭云中转 defer），额外把哈希信息带出来给 .cas 用。
+func (y *Cloud189PC) uploadFile(ctx context.Context, dstDir model.Obj, stream model.FileStreamer, up driver.UpdateProgress) (newObj model.Obj, info *casUploadInfo, err error) {
 	overwrite := true
 	isFamily := y.isFamily()
 
 	// 响应时间长,按需启用
 	if y.Addition.RapidUpload && !stream.IsForceStreamUpload() {
 		// 尝试妙传
-		if newObj, err := y.RapidUpload(ctx, dstDir, stream, isFamily, overwrite); err == nil {
-			return newObj, nil
+		if newObj, info, err := y.RapidUpload(ctx, dstDir, stream, isFamily, overwrite); err == nil {
+			return newObj, info, nil
 		}
 	}
 

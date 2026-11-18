@@ -51,7 +51,7 @@ func (d *Cloud189PC) RapidUploadByHashes(ctx context.Context, dstDir model.Obj, 
 	}
 
 	stream := driver.NewSeedHashStream(req)
-	obj, err := d.RapidUpload(ctx, dstDir, stream, d.isFamily(), overwrite)
+	obj, _, err := d.RapidUpload(ctx, dstDir, stream, d.isFamily(), overwrite)
 	if err != nil {
 		// CAS 的报错更具体（云端不存在 / 分片不匹配），失败时优先上报它
 		if casErr != nil {

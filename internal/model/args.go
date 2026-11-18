@@ -12,6 +12,9 @@ import (
 
 type ListArgs struct {
 	ReqPath            string
+	// ActualPath 是 storage 内的真实路径（已去掉挂载前缀），由 op.list 注入，
+	// 供驱动判断某个功能（如 CAS 自动恢复）是否作用于当前目录。
+	ActualPath         string
 	S3ShowPlaceholder  bool
 	Refresh            bool
 	WithStorageDetails bool

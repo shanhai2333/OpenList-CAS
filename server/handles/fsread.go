@@ -1,12 +1,14 @@
 package handles
 
 import (
+	"context"
 	"fmt"
 	stdpath "path"
 	"strings"
 	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/conf"
+	"github.com/OpenListTeam/OpenList/v4/internal/driver"
 	"github.com/OpenListTeam/OpenList/v4/internal/errs"
 	"github.com/OpenListTeam/OpenList/v4/internal/fs"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
@@ -311,11 +313,14 @@ func FsGet(c *gin.Context, req *FsGetReq, user *model.User) {
 	if !ok && err == nil {
 		provider = storage.Config().Name
 	}
+	typeName := obj.GetName()
 	if !obj.IsDir() {
 		if err != nil {
 			common.ErrorResp(c, err, 500)
 			return
 		}
+		// .cas 的“真实类型”由元数据决定，前端据此判断能否播放
+		typeName = resolveCASPreviewTypeName(c.Request.Context(), storage, obj)
 		if storage.Config().MustProxy() || storage.GetStorage().WebProxy {
 			rawURL = common.GenerateDownProxyURL(storage.GetStorage(), reqPath)
 			if rawURL == "" {
@@ -350,7 +355,7 @@ func FsGet(c *gin.Context, req *FsGetReq, user *model.User) {
 	}
 	parentPath := stdpath.Dir(reqPath)
 	var related []model.Obj
-	if !obj.IsDir() && utils.GetFileType(obj.GetName()) == conf.VIDEO {
+	if !obj.IsDir() && utils.GetFileType(typeName) == conf.VIDEO {
 		sameLevelFiles, err := fs.List(c.Request.Context(), parentPath, &fs.ListArgs{})
 		if err == nil {
 			related = filterRelated(sameLevelFiles, obj)
@@ -369,7 +374,7 @@ func FsGet(c *gin.Context, req *FsGetReq, user *model.User) {
 			HashInfoStr:  obj.GetHash().String(),
 			HashInfo:     obj.GetHash().Export(),
 			Sign:         common.Sign(obj, parentPath, isEncrypt(meta, reqPath)),
-			Type:         utils.GetObjType(obj.GetName(), obj.IsDir()),
+			Type:         utils.GetObjType(typeName, obj.IsDir()),
 			Thumb:        thumb,
 			MountDetails: mountDetails,
 		},
@@ -379,6 +384,21 @@ func FsGet(c *gin.Context, req *FsGetReq, user *model.User) {
 		Provider: provider,
 		Related:  toObjsResp(related, parentPath, isEncrypt(parentMeta, parentPath)),
 	})
+}
+
+func resolveCASPreviewTypeName(ctx context.Context, storage driver.Driver, obj model.Obj) string {
+	if obj == nil || storage == nil || obj.IsDir() {
+		return obj.GetName()
+	}
+	namer, ok := storage.(driver.CASPreviewNamer)
+	if !ok {
+		return obj.GetName()
+	}
+	name, err := namer.CASPreviewName(ctx, obj)
+	if err != nil || name == "" {
+		return obj.GetName()
+	}
+	return name
 }
 
 func filterRelated(objs []model.Obj, obj model.Obj) []model.Obj {

@@ -2,9 +2,12 @@ package _189pc
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/OpenListTeam/OpenList/v4/drivers/base"
 	"github.com/OpenListTeam/OpenList/v4/internal/casmeta"
@@ -33,7 +36,7 @@ func (y *Cloud189PC) CASPreviewName(ctx context.Context, file model.Obj) (string
 	if !isCASName(file.GetName()) {
 		return file.GetName(), nil
 	}
-	info, err := y.parseCASFromObj(ctx, file)
+	info, err := y.parseCASFromObjCached(ctx, file)
 	if err != nil {
 		return "", err
 	}
@@ -48,6 +51,34 @@ func (y *Cloud189PC) CASPreviewName(ctx context.Context, file model.Obj) (string
 		return file.GetName(), nil
 	}
 	return previewName, nil
+}
+
+// .cas 内容生成后不会再变，但 FsGet 会被前端/媒体库/缩略图反复调用，
+// 每次都去云端拉一遍 .cas 会明显拖慢首帧，这里做一层进程内短缓存。
+type casPreviewCacheEntry struct {
+	info   *casUploadInfo
+	expire time.Time
+}
+
+var casPreviewCache sync.Map
+
+const casPreviewCacheTTL = 5 * time.Minute
+
+func (y *Cloud189PC) parseCASFromObjCached(ctx context.Context, file model.Obj) (*casUploadInfo, error) {
+	key := fmt.Sprintf("%d|%s|%d", y.GetStorage().ID, file.GetID(), file.GetSize())
+	if v, ok := casPreviewCache.Load(key); ok {
+		entry := v.(*casPreviewCacheEntry)
+		if time.Now().Before(entry.expire) {
+			return entry.info, nil
+		}
+		casPreviewCache.Delete(key)
+	}
+	info, err := y.parseCASFromObj(ctx, file)
+	if err != nil {
+		return nil, err
+	}
+	casPreviewCache.Store(key, &casPreviewCacheEntry{info: info, expire: time.Now().Add(casPreviewCacheTTL)})
+	return info, nil
 }
 
 func (y *Cloud189PC) linkCASVideo(ctx context.Context, file model.Obj, args model.LinkArgs) (*model.Link, error) {
@@ -71,7 +102,7 @@ func (y *Cloud189PC) linkCASVideo(ctx context.Context, file model.Obj, args mode
 		y.endCleanupTask()
 		return nil, err
 	}
-	tempIsFamily := y.isFamily() || y.FamilyTransfer
+	tempIsFamily := y.isFamily()
 	tempDir, err := y.createTempSubDir(ctx, tempRoot, casTempSubDirName(), tempIsFamily)
 	if err != nil {
 		y.endCleanupTask()

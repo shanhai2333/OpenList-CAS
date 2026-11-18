@@ -98,7 +98,7 @@ func (y *Cloud189PC) RapidUploadFromTorrent(ctx context.Context, dstDir model.Ob
 				Reader:   bytes.NewReader(torrentData),
 				Mimetype: "application/x-bittorrent",
 			}
-			_, uploadErr := y.fastUpload(context.Background(), capturedDstDir, torrentFileStream, func(p float64) {}, capturedIsFamily, false, false)
+			_, _, uploadErr := y.fastUpload(context.Background(), capturedDstDir, torrentFileStream, func(p float64) {}, capturedIsFamily, false, false)
 			if uploadErr != nil {
 				utils.Log.Warnf("failed to upload torrent file: %v", uploadErr)
 			} else {

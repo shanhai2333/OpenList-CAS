@@ -3,7 +3,6 @@ package _189pc
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 	"github.com/OpenListTeam/OpenList/v4/internal/casmeta"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
 	"github.com/OpenListTeam/OpenList/v4/internal/stream"
+	"github.com/OpenListTeam/OpenList/v4/pkg/torrent"
 	"github.com/OpenListTeam/OpenList/v4/pkg/utils"
 )
 
@@ -22,12 +22,34 @@ func isCASName(name string) bool {
 	return casmeta.IsName(name)
 }
 
+// isSidecarName 判断文件名是否已经是某种 CAS 侧车（.cas 或 .cas.torrent），
+// 侧车自身绝不能再生成侧车，否则会无限递归。
+func isSidecarName(name string) bool {
+	return isCASName(name) || isCASTorrentFile(name)
+}
+
+func (y *Cloud189PC) casSidecarEnabled() bool {
+	return y.CASMode == "sidecar" || y.CASMode == "both"
+}
+
+func (y *Cloud189PC) torrentSidecarEnabled() bool {
+	switch y.CASMode {
+	case "torrent", "both":
+		return true
+	case "off", "sidecar":
+		return false
+	default:
+		// auto / 未设置：沿用上游行为，由 generate_torrent 决定
+		return y.Addition.GenerateTorrent
+	}
+}
+
 func (y *Cloud189PC) shouldUploadCAS(name string) bool {
-	return y.GenerateCAS && !isCASName(name) && casmeta.ExtAllowed(name, y.CASExtAllowlist)
+	return y.casSidecarEnabled() && !isSidecarName(name) && casmeta.ExtAllowed(name, y.CASExtAllowlist)
 }
 
 func (y *Cloud189PC) shouldDeleteSource() bool {
-	return y.GenerateCAS && y.DeleteSource
+	return y.casSidecarEnabled() && y.DeleteSource
 }
 
 func (y *Cloud189PC) uploadCAS(ctx context.Context, dstDir model.Obj, info *casUploadInfo) (model.Obj, error) {
@@ -53,7 +75,8 @@ func (y *Cloud189PC) uploadCAS(ctx context.Context, dstDir model.Obj, info *casU
 		Reader:   bytes.NewReader(content),
 		Mimetype: "text/plain",
 	}
-	uploadedCASObj, _, err := y.uploadFile(ctx, dstDir, casStream, func(float64) {})
+	// 侧车走 fastUpload：不经过家庭云中转，也不会再生成 torrent/ .cas 侧车
+	uploadedCASObj, _, err := y.fastUpload(ctx, dstDir, casStream, func(float64) {}, y.isFamily(), true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -82,9 +105,12 @@ func (y *Cloud189PC) parseCAS(data []byte) (*casUploadInfo, error) {
 }
 
 func (y *Cloud189PC) parseCASFromStreamer(file model.FileStreamer) (*casUploadInfo, error) {
-	data, err := io.ReadAll(file)
+	data, err := io.ReadAll(io.LimitReader(file, torrent.DefaultMaxSeedSize+1))
 	if err != nil {
 		return nil, err
+	}
+	if int64(len(data)) > torrent.DefaultMaxSeedSize {
+		return nil, fmt.Errorf("cas payload exceeds %d bytes", torrent.DefaultMaxSeedSize)
 	}
 	return y.parseCAS(data)
 }
@@ -117,25 +143,4 @@ func headerToMap(header http.Header) map[string]string {
 		}
 	}
 	return headers
-}
-
-func ComputeSliceMD5sFromReader(reader io.Reader, sliceSize int64) (string, []string, error) {
-	if sliceSize <= 0 {
-		sliceSize = casmeta.DefaultSliceSize
-	}
-	hasher := casmeta.NewHasherWriter(sliceSize)
-	if _, err := io.Copy(hasher, reader); err != nil {
-		return "", nil, err
-	}
-	info := hasher.Info("")
-	if info.SliceMD5 == info.MD5 {
-		return info.MD5, nil, nil
-	}
-	return info.MD5, []string{info.SliceMD5}, nil
-}
-
-func GetMD5Str(s string) string {
-	h := utils.MD5.NewFunc()
-	_, _ = h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
 }

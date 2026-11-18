@@ -21,9 +21,6 @@ func casTempSubDirName() string {
 
 func (y *Cloud189PC) ensureTempDir(ctx context.Context) (model.Obj, error) {
 	isFamily := y.isFamily()
-	if !isFamily && y.FamilyTransfer {
-		isFamily = true
-	}
 	if obj, err := y.findFolderByName(ctx, casTempDirName, IF(isFamily, "", y.RootFolderID), isFamily); err == nil {
 		return obj, nil
 	}
@@ -100,10 +97,6 @@ func (y *Cloud189PC) findFolderByName(ctx context.Context, searchName string, fo
 	}
 }
 
-func (y *Cloud189PC) findFamilyTransferFolder(ctx context.Context) (*Cloud189Folder, error) {
-	return y.findFolderByName(ctx, "FamilyTransferFolder", "", true)
-}
-
 func (y *Cloud189PC) notifyTaskDone() {
 	if y.debounceClean != nil {
 		y.debounceClean()
@@ -125,16 +118,6 @@ func (y *Cloud189PC) endCleanupTask() {
 	y.notifyTaskDone()
 }
 
-func (y *Cloud189PC) queueFamilyTransferCleanupObj(obj model.Obj) {
-	if obj == nil {
-		return
-	}
-	y.cleanupMu.Lock()
-	y.cleanupFamilyObjs = append(y.cleanupFamilyObjs, obj)
-	y.scheduleDebounceCleanLocked()
-	y.cleanupMu.Unlock()
-}
-
 func (y *Cloud189PC) newDebounceCleaner() func() {
 	return func() {
 		y.cleanupMu.Lock()
@@ -144,7 +127,7 @@ func (y *Cloud189PC) newDebounceCleaner() func() {
 }
 
 func (y *Cloud189PC) scheduleDebounceCleanLocked() {
-	if y.cleanupActive > 0 && len(y.cleanupFamilyObjs) == 0 {
+	if y.cleanupActive > 0 {
 		return
 	}
 	if y.cleanupTimer != nil {
@@ -155,59 +138,20 @@ func (y *Cloud189PC) scheduleDebounceCleanLocked() {
 
 func (y *Cloud189PC) runDebounceClean() {
 	y.cleanupMu.Lock()
-	familyObjs := y.cleanupFamilyObjs
-	y.cleanupFamilyObjs = nil
 	shouldCleanAll := y.cleanupActive == 0
 	y.cleanupTimer = nil
 	y.cleanupMu.Unlock()
 
-	for _, obj := range familyObjs {
-		if err := y.deleteFamilyTransferObj(context.TODO(), obj); err != nil {
-			utils.Log.Errorf("casFamilyTransferObjCleanError:%s", err)
-		}
-	}
-
 	if !shouldCleanAll {
 		return
-	}
-
-	if y.FamilyTransfer && y.familyTransferFolder != nil {
-		if err := y.cleanFamilyTransfer(context.TODO()); err != nil {
-			utils.Log.Errorf("cleanFamilyTransferFolderError:%s", err)
-		}
 	}
 	if err := y.cleanTempFolder(context.TODO()); err != nil {
 		utils.Log.Errorf("casTempCleanError:%s", err)
 	}
 }
 
-func (y *Cloud189PC) deleteFamilyTransferObj(ctx context.Context, obj model.Obj) error {
-	if obj == nil {
-		return nil
-	}
-	target := obj
-	if target.GetID() == "" && y.familyTransferFolder != nil && target.GetName() != "" {
-		if found, err := y.findFileByName(ctx, target.GetName(), y.familyTransferFolder.GetID(), true); err == nil {
-			target = found
-		}
-	}
-	if target.GetID() == "" {
-		return nil
-	}
-	err := y.Delete(ctx, y.FamilyID, target)
-	if err != nil && y.familyTransferFolder != nil && obj.GetName() != "" {
-		if found, findErr := y.findFileByName(ctx, obj.GetName(), y.familyTransferFolder.GetID(), true); findErr == nil {
-			err = y.Delete(ctx, y.FamilyID, found)
-		}
-	}
-	return err
-}
-
 func (y *Cloud189PC) cleanTempFolder(ctx context.Context) error {
 	isFamily := y.isFamily()
-	if !isFamily && y.FamilyTransfer {
-		isFamily = true
-	}
 	tempDir, err := y.findFolderByName(ctx, casTempDirName, IF(isFamily, "", y.RootFolderID), isFamily)
 	if err != nil {
 		return nil
