@@ -3,6 +3,10 @@ name: Beta Release builds
 on:
   push:
     branches: ["main"]
+    paths-ignore:
+      - "README.md"
+      - "README_*.md"
+      - "docs/**"
   workflow_dispatch:
 
 concurrency:

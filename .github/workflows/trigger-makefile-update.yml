@@ -13,6 +13,8 @@ on:
 
 jobs:
   trigger-makefile-update:
+    # 只有上游仓库才需要通知 OpenWRT 打包仓库；fork 的 tag 直接跳过
+    if: github.repository == 'OpenListTeam/OpenList'
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Makefile hash update

@@ -8,6 +8,8 @@ on:
 
 jobs:
   sync:
+    # 只有在仓库配置了 Gitee 目标地址与 SSH 私钥时才同步，否则直接跳过（不阻塞 CI）
+    if: vars.GITEE_REPO_URL != ''
     runs-on: ubuntu-latest
     name: Sync GitHub to Gitee
     steps:
