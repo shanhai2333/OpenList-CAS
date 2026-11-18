@@ -27,7 +27,7 @@ permissions:
 env:
   # 本仓库只发布 DockerHub 镜像；GHCR 需要 packages: write 且包归属组织，
   # fork 上默认没有该权限，因此不再推送 GHCR。
-  DOCKERHUB_ORG_NAME: ${{ vars.DOCKERHUB_ORG_NAME || github.repository_owner }}
+  DOCKERHUB_ORG_NAME: ${{ vars.DOCKERHUB_ORG_NAME || 'shanhaijun' }}
   IMAGE_NAME_DOCKERHUB: openlist
   ARTIFACT_NAME: 'binaries_docker_release'
   RELEASE_PLATFORMS: 'linux/amd64,linux/arm64,linux/arm/v7,linux/386,linux/arm/v6,linux/ppc64le,linux/riscv64,linux/loong64' ### Temporarily disable Docker builds for linux/s390x architectures for unknown reasons.

@@ -60,7 +60,7 @@
 ```yaml
 services:
   openlist-cas:
-    image: shanhai2333/openlist:beta
+    image: shanhaijun/openlist:beta
     container_name: openlist-cas
     restart: always
     user: '0:0'
@@ -153,13 +153,13 @@ Local 存储只有 `generate_cas` 与 `delete_source` 两个开关。
 
 | 名称 | 默认值 | 用途 |
 |---|---|---|
-| `DOCKERHUB_ORG_NAME` | 仓库 owner（如 `shanhai2333`） | 镜像命名空间，最终镜像为 `<该值>/openlist` |
+| `DOCKERHUB_ORG_NAME` | `shanhaijun` | 镜像命名空间，最终镜像为 `<该值>/openlist` |
 | `DOCKERHUB_ORG_NAME_BACKUP` | 空 | 当 DockerHub **登录用户名**与镜像命名空间不同时填写（例如镜像在组织下、用个人账号登录） |
 | `FRONTEND_REPO` | `OpenListTeam/OpenList-Frontend` | 前端产物来源仓库，一般不用改 |
 | `GITEE_REPO_URL` | 空 | 填了才会执行 Gitee 同步，为空时该工作流自动跳过 |
 | `HOOK_REPO` | `OpenListTeam/OpenList-OpenWRT` | 仅在上游仓库生效，本仓库忽略 |
 
-> 只需要镜像能推成功时，配 `DOCKERHUB_TOKEN` 一个 secret 就够了：镜像名与登录用户名默认都取仓库 owner。
+> 只需要镜像能推成功时，配 `DOCKERHUB_TOKEN` 一个 secret 就够了：镜像名与登录用户名默认都取 `shanhaijun`。推出来的镜像是 `shanhaijun/openlist:<tag>`（`beta` 或版本号），与同账号下的 `mymediahelper` 镜像是两个独立仓库。
 
 ### 版本号
 
