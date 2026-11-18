@@ -26,12 +26,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Create or update ref
-        id: create-or-update-ref
-        uses: ovsds/create-or-update-ref-action@f66e3f24fa250e50da7d3e599bae67bc3f749a5e # v1
-        with:
-          ref: tags/beta
-          sha: ${{ github.sha }}
+      - name: Point beta tag to this commit
+        run: |
+          git tag -f beta
+          git push -f origin refs/tags/beta
 
       - name: Delete beta tag
         run: git tag -d beta
