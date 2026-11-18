@@ -16,6 +16,8 @@ type Addition struct {
 	ShowHidden       bool   `json:"show_hidden" default:"true" required:"false" help:"show hidden directories and files"`
 	MkdirPerm        string `json:"mkdir_perm" default:"777"`
 	RecycleBinPath   string `json:"recycle_bin_path" default:"delete permanently" help:"path to recycle bin, delete permanently if empty or keep 'delete permanently'"`
+	GenerateCAS      bool   `json:"generate_cas" help:"After upload, generate a same-name .cas metadata file"`
+	DeleteSource     bool   `json:"delete_source" help:"After generating the .cas file, delete the uploaded source file permanently"`
 }
 
 var config = driver.Config{

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -429,20 +430,50 @@ func (d *Local) Put(ctx context.Context, dstDir model.Obj, stream model.FileStre
 	if err != nil {
 		return err
 	}
+	closed := false
 	defer func() {
-		_ = out.Close()
+		if !closed {
+			_ = out.Close()
+		}
 		if errors.Is(err, context.Canceled) {
 			_ = os.Remove(fullPath)
 		}
 	}()
-	err = utils.CopyWithCtx(ctx, out, stream, stream.GetSize(), up)
+
+	var info *localCASInfo
+	if d.shouldUploadCAS(stream.GetName()) {
+		hasher := newLocalCASHasherWriter(stream.GetSize())
+		err = utils.CopyWithCtx(ctx, io.MultiWriter(out, hasher), stream, stream.GetSize(), up)
+		if err == nil {
+			info = hasher.Info(stream.GetName())
+		}
+	} else {
+		err = utils.CopyWithCtx(ctx, out, stream, stream.GetSize(), up)
+	}
 	if err != nil {
 		return err
 	}
+	if err = out.Close(); err != nil {
+		return err
+	}
+	closed = true
 	err = os.Chtimes(fullPath, stream.ModTime(), stream.ModTime())
 	if err != nil {
 		log.Errorf("[local] failed to change time of %s: %s", fullPath, err)
 	}
+
+	// 生成 .cas 侧车，按需删除源文件
+	if info != nil {
+		if casErr := d.uploadCAS(ctx, dstDir, info); casErr != nil {
+			log.Errorf("[local] failed to generate .cas for %s: %s", stream.GetName(), casErr)
+		}
+		if d.DeleteSource {
+			if delErr := d.deleteSource(ctx, fullPath, info); delErr != nil {
+				return delErr
+			}
+		}
+	}
+
 	if d.directoryMap.Has(dstDir.GetPath()) {
 		d.directoryMap.UpdateDirSize(dstDir.GetPath())
 		d.directoryMap.UpdateDirParents(dstDir.GetPath())

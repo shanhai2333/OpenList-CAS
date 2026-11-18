@@ -6,13 +6,16 @@ import (
 	"path/filepath"
 
 	"github.com/OpenListTeam/OpenList/v4/internal/casmeta"
+	"github.com/OpenListTeam/OpenList/v4/internal/conf"
 	"github.com/OpenListTeam/OpenList/v4/internal/model"
 )
 
 type localCASInfo = casmeta.Info
 
-func newLocalCASHasherWriter() *casmeta.HasherWriter {
-	return casmeta.NewHasherWriter(casmeta.DefaultSliceSize)
+// newLocalCASHasherWriter 分片大小必须与天翼云端规则一致：
+// 不同大小档位的分片大小不同，写成固定 10MB 会让大文件的 .cas 无法秒传。
+func newLocalCASHasherWriter(size int64) *casmeta.HasherWriter {
+	return casmeta.NewHasherWriter(casmeta.SliceSizeFor(size))
 }
 
 func localIsCASName(name string) bool {
@@ -50,7 +53,10 @@ func (d *Local) deleteSource(ctx context.Context, fullPath string, info *localCA
 	if info == nil || !d.DeleteSource || !d.shouldUploadCAS(info.Name) {
 		return nil
 	}
-	return d.Remove(ctx, &model.Object{
+	// 配置了回收站时，默认的 Remove 只是把文件挪进回收站，空间不会释放，
+	// 这里显式要求永久删除。
+	removeCtx := context.WithValue(ctx, conf.RemovePermanentlyKey, struct{}{})
+	return d.Remove(removeCtx, &model.Object{
 		Path: fullPath,
 		Name: info.Name,
 		Size: info.Size,
